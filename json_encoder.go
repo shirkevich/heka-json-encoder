@@ -125,6 +125,7 @@ func (e *JsonEncoder) Encode(pack *pipeline.PipelinePack) (output []byte, err er
 	// Writing out the dynamic message fields is a bit of a PITA.
 	fields := m.GetFields()
 	if len(fields) > 0 {
+		buf.WriteString(`,`)
 		writeQuotedString(&buf, "Fields")
 		buf.WriteString(`:{`)
 		for fieldNum, field := range fields {
