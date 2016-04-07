@@ -3,7 +3,8 @@ package json_encoder
 import (
 	"bytes"
 	"strconv"
-
+	"time"
+	"github.com/cactus/gostrftime"
 	"github.com/mozilla-services/heka/pipeline"
 )
 
@@ -101,14 +102,14 @@ func (e *JsonEncoder) Encode(pack *pipeline.PipelinePack) (output []byte, err er
 	buf := bytes.Buffer{}
 	buf.WriteString(`{`)
 
-	timestampFormat = "%Y-%m-%dT%H:%M:%S"
+	timestampFormat := "%Y-%m-%dT%H:%M:%S"
 	t := time.Unix(0, m.GetTimestamp()).UTC()
 	writeStringField(true, &buf, "Timestamp", gostrftime.Strftime(timestampFormat, t))
 	writeStringField(true, &buf, "Type", m.GetType())
 	writeStringField(false, &buf, "Host", m.GetHostname())
 	writeStringField(false, &buf, "Payload", m.GetPayload())
-	writeStringField(false, &buf, "Pid", m.GetPid())
-	writeStringField(false, &buf, "Severity", m.GetSeverity())
+	writeIntField(false, &buf, "Pid", m.GetPid())
+	writeIntField(false, &buf, "Severity", m.GetSeverity())
 	writeStringField(false, &buf, "Uuid", m.GetUuidString())
 	
 	writeIntField(false, &buf, "@version", 1)
