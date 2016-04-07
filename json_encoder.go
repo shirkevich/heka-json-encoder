@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"strconv"
 	"time"
+	"strings"
+	"encoding/base64"
 	"github.com/cactus/gostrftime"
+	"github.com/mozilla-services/heka/message"
 	"github.com/mozilla-services/heka/pipeline"
 )
 
@@ -84,6 +87,7 @@ func writeIntField(first bool, b *bytes.Buffer, name string, value int32) {
 // END COPIED
 
 type JsonEncoder struct {
+	typeNames []string
 }
 
 type JsonEncoderConfig struct {
@@ -94,6 +98,10 @@ func (e *JsonEncoder) ConfigSruct() interface{} {
 }
 
 func (e *JsonEncoder) Init(config interface{}) (err error) {
+	e.typeNames = make([]string, len(message.Field_ValueType_name))
+	for i, typeName := range message.Field_ValueType_name {
+		e.typeNames[i] = strings.ToLower(typeName)
+	}
 	return
 }
 
@@ -105,15 +113,59 @@ func (e *JsonEncoder) Encode(pack *pipeline.PipelinePack) (output []byte, err er
 	timestampFormat := "%Y-%m-%dT%H:%M:%S"
 	t := time.Unix(0, m.GetTimestamp()).UTC()
 	writeStringField(true, &buf, "Timestamp", gostrftime.Strftime(timestampFormat, t))
-	writeStringField(true, &buf, "Type", m.GetType())
+	writeStringField(false, &buf, "Type", m.GetType())
 	writeStringField(false, &buf, "Host", m.GetHostname())
 	writeStringField(false, &buf, "Logger", m.GetLogger())
 	writeStringField(false, &buf, "Payload", m.GetPayload())
 	writeIntField(false, &buf, "Pid", m.GetPid())
 	writeIntField(false, &buf, "Severity", m.GetSeverity())
 	writeStringField(false, &buf, "Uuid", m.GetUuidString())
-	
 	writeIntField(false, &buf, "@version", 1)
+
+	// Writing out the dynamic message fields is a bit of a PITA.
+	fields := m.GetFields()
+	if len(fields) > 0 {
+		writeQuotedString(&buf, "Fields")
+		buf.WriteString(`:{`)
+		for fieldNum, field := range fields {
+			firstField := fieldNum == 0
+			valueType := field.GetValueType()
+			//typeName := e.typeNames[valueType]
+			var values []string
+			switch valueType {
+			case message.Field_STRING:
+				values = field.GetValueString()
+				writeStringField(firstField, &buf, field.GetName(), field.GetValueString()[0])
+
+			case message.Field_BYTES:
+				vBytes := field.GetValueBytes()
+				values = make([]string, len(vBytes))
+				for i, v := range vBytes {
+					values[i] = base64.StdEncoding.EncodeToString(v)
+				}
+			case message.Field_DOUBLE:
+				vDoubles := field.GetValueDouble()
+				values = make([]string, len(vDoubles))
+				for i, v := range vDoubles {
+					values[i] = strconv.FormatFloat(v, 'g', -1, 64)
+				}
+			case message.Field_INTEGER:
+				vInts := field.GetValueInteger()
+				values = make([]string, len(vInts))
+				for i, v := range vInts {
+					values[i] = strconv.FormatInt(v, 10)
+				}
+				writeIntField(firstField, &buf, field.GetName(), int32(vInts[0]))
+			case message.Field_BOOL:
+				vBools := field.GetValueBool()
+				values = make([]string, len(vBools))
+				for i, v := range vBools {
+					values[i] = strconv.FormatBool(v)
+				}
+			}
+		}
+		buf.WriteString(`}`)
+	}
 
 	buf.WriteString(`}`)
 	buf.WriteByte(NEWLINE)
@@ -126,3 +178,4 @@ func init() {
 		return new(JsonEncoder)
 	})
 }
+
