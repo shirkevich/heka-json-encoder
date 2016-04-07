@@ -101,9 +101,16 @@ func (e *JsonEncoder) Encode(pack *pipeline.PipelinePack) (output []byte, err er
 	buf := bytes.Buffer{}
 	buf.WriteString(`{`)
 
-	writeStringField(true, &buf, "type", m.GetType())
-	writeStringField(false, &buf, "host", m.GetHostname())
-	writeStringField(false, &buf, "message", m.GetPayload())
+	timestampFormat = "%Y-%m-%dT%H:%M:%S"
+	t := time.Unix(0, m.GetTimestamp()).UTC()
+	writeStringField(true, &buf, "Timestamp", gostrftime.Strftime(timestampFormat, t))
+	writeStringField(true, &buf, "Type", m.GetType())
+	writeStringField(false, &buf, "Host", m.GetHostname())
+	writeStringField(false, &buf, "Payload", m.GetPayload())
+	writeStringField(false, &buf, "Pid", m.GetPid())
+	writeStringField(false, &buf, "Severity", m.GetSeverity())
+	writeStringField(false, &buf, "Uuid", m.GetUuidString())
+	
 	writeIntField(false, &buf, "@version", 1)
 
 	buf.WriteString(`}`)
